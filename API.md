@@ -11,11 +11,11 @@ After initialization, the user must configure a speed and necessary masks & filt
 Finally, bringing the controller out of _CONFIGURATION_ mode and into _NORMAL_ mode necessitates running
 _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
 
-* void can_init()
+* **void** can_init()
 
     > Initialize controller, SPI and I/O ports related to controller operation
 
-* int can_speed(uint32_t bitrate, uint8_t propagation_segment_hint, uint8_t synchronization_jump)
+* **int** can_speed(**uint32_t** bitrate, **uint8_t** propagation_segment_hint, **uint8_t** synchronization_jump)
 
     > Configure CAN speed.  Bitrate is in Hz, maximum is 1000000.  The other 2 options are advanced
     > CAN options and can be set to '1' (or '0' which is translated to '1' anyhow).  The first option,
@@ -25,7 +25,7 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
     >
     > Return value: 0 if success, -1 if error
 
-* int can_rx_setmask(uint8_t maskid, uint32_t msgmask, uint8_t is_ext)
+* **int** can_rx_setmask(**uint8_t** maskid, **uint32_t** msgmask, **uint8_t** is_ext)
 
     > Configure one of the two message filter masks.  maskid = 0 is for RXB0, maskid = 1 is for RXB1.
     > msgmask stores up to 29 bits, and is_ext declares whether this is a CAN 2.0B Extended message
@@ -39,7 +39,7 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
     >
     > Return value: maskid if success, -1 if error
 
-* int can_rx_setfilter(uint8_t rxb, uint8_t filtid, uint32_t msgid)
+* **int** can_rx_setfilter(**uint8_t** rxb, **uint8_t** filtid, **uint32_t** msgid)
 
     > Set a filter.  rxb is the buffer#, filtid sets the filter# ... rxb0 supports 2 filters (filtid = 0 or 1),
     > rxb1 supports 3 filters (filtid = 0, 1 or 2).  rxb0 is considered a higher-priority buffer, and there is
@@ -50,7 +50,7 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
     >
     > Return value: filtid if success, -1 if error
 
-* **int can_rx_mode(uint8_t rxb, uint8_t mode)**
+* **int** can_rx_mode(**uint8_t** rxb, **uint8_t** mode)
 
     > Set receive matching mode for the RX buffer#.  Options for _mode_ include:
     > * **MCP2515_RXB0CTRL_MODE_RECV_STD_OR_EXT** - Receive either STD or EXT messages matching a filter (EXT message ID bits applied to first 2 data bytes for STD messages)
