@@ -72,16 +72,16 @@ to send a message with this same msgid containing the appropriate data.  Note th
 "Controller Area Network Projects" by Dogan Ibrahim).  If you never expect to see or use this feature, just be sure to AND the
 return value with 0x0F every time.
 
-* int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
+* **int** can_recv( **uint32_t** *msgid, **uint8_t** *is_ext, **void** *buf )
 
-    > Retrieve the message from the first pending RX buffer, clearing its CANINTF IRQ flag when complete.  The message ID for this
-    > message will be stored in the user-supplied uint32_t variable (you must provide a pointer to that) and the Std. vs Ext. message
-    > specifier is stored in the user's supplied is_ext variable; 0 = Standard, 1 = Extended.  The data contents are stored in the
+    > Retrieve the message from the first pending RX buffer, clearing its _CANINTF_ IRQ flag when complete.  The message ID for this
+    > message will be stored in the user-supplied **uint32_t variable** (you must provide a pointer to that) and the Std. vs Ext. message
+    > specifier is stored in the user's supplied **is_ext** variable; 0 = Standard, 1 = Extended.  The data contents are stored in the
     > supplied buffer and the length of that data returned in the lower 4 bits of the function's return value.
     >
     > Return value: Data length possibly OR'd with 0x40 if RTR/SRR was set, -1 if no messages are pending.
 
-* int can_rx_pending()
+* **int** can_rx_pending()
 
     > Simple function to determine if any RX IRQs are pending.
     >
@@ -102,7 +102,7 @@ Messages are sent with a message ID, Extended vs. Standard mode selected, a data
 a second function called _can_query()_ can use the RTR or SRR feature to request that a remote node managing a particular message ID
 provide an update (another frame should be received shortly with that same message ID and the requisite data contents).
 
-* int can_send(uint32_t msg, uint8_t is_ext, void *buf, uint8_t len, uint8_t prio)
+* **int** can_send( **uint32_t** msg, **uint8_t** is_ext, **void** *buf, **uint8_t** len, **uint8_t** prio )
 
     > Send a message on the next available TX buffer.  Up to 29-bit message ID, Std. vs Ext. mode supported,
     > length can be from 0 to 8 and priority from 0 to 3.  Upon data transmission, the TX IRQ may be set and you must
@@ -111,7 +111,7 @@ provide an update (another frame should be received shortly with that same messa
     >
     > Return value: TX buffer# if success, -1 if no available TX buffer slots
 
-* int can_query(uint32_t msg, uint8_t is_ext, uint8_t prio)
+* **int** can_query( **uint32_t** msg, **uint8_t** is_ext, **uint8_t** prio )
 
     > Send an RTR or SRR (Remote Transfer Request) frame for the indicated message ID.  There is no data payload; a 0-byte
     > frame is sent with the RTR (extended message) or SRR (standard message) bit set.  The recipient of this message is
@@ -159,18 +159,18 @@ The MCP2515_IRQ_ERROR bit indicates one of many error conditions are present.  A
   done here.
 * MCP2515_IRQ_ERROR with MCP2515_IRQ_TX means a transmit failed.  _mcp2515_buf_ contains the TXB# affected.
 
-* int can_irq_handler()
+* **int** can_irq_handler()
 
-    > Pulls MCP2515_CANINTF and possibly MCP2515_EFLG to determine the current interrupt state of the controller.  Discovery of
+    > Pulls **MCP2515_CANINTF** and possibly **MCP2515_EFLG** to determine the current interrupt state of the controller.  Discovery of
     > TX buffer# or RX buffer# is performed for the purpose of automatically clearing the IRQ (TX) or providing information about
     > the RXB# (not typically used, but can be reported for debugging purposes).  A bitmap of values including:
-    > * MCP2515_IRQ_TX
-    > * MCP2515_IRQ_RX
-    > * MCP2515_IRQ_ERROR
-    > * MCP2515_IRQ_WAKEUP
-    > * MCP2515_IRQ_HANDLED
-    > may be returned indicating the reason.  MCP2515_IRQ_HANDLED is a lazy bit indicating the app does not need to go into
-    > great detail to analyze what just happened, but that it can loop around again through its main loop.  A bit called MCP2515_IRQ_FLAGGED
+    > * **MCP2515_IRQ_TX**
+    > * **MCP2515_IRQ_RX**
+    > * **MCP2515_IRQ_ERROR**
+    > * **MCP2515_IRQ_WAKEUP**
+    > * **MCP2515_IRQ_HANDLED**
+    > may be returned indicating the reason.  **MCP2515_IRQ_HANDLED** is a lazy bit indicating the app does not need to go into
+    > great detail to analyze what just happened, but that it can loop around again through its main loop.  A bit called **MCP2515_IRQ_FLAGGED**
     > is used as the ultimate signal to the user's firmware indicating that no more events are pending.  This bit is set by
     > the user's firmware ISR for the MCP2515's IRQ line and cleared only by this function.  It must be tested and confirmed clear
     > before the user's firmware enters any form of busy-wait or Low-Power sleep mode.
@@ -194,13 +194,13 @@ bits (and MCP2515_IRQ_HANDLED will be cleared).
 To analyze bus errors that are not directly related to our TX or RX operations, the _can_read_error()_ function was provided to read
 the necessary EFLG (Error Flag), TEC (Transmit Error Counter) and REC (Receiver Error Counter) registers.
 
-* int can_read_error(uint8_t reg)
+* **int** can_read_error( **uint8_t** reg )
 
     > Read the requisite error register and provide its contents.
     > Valid registers include:
-    > * MCP2515_TEC - Transmit Error counter
-    > * MCP2515_REC - Receiver Error counter
-    > * MCP2515_EFLG - Error flags, see bit breakdown:
+    > * **MCP2515_TEC** - Transmit Error counter
+    > * **MCP2515_REC** - Receiver Error counter
+    > * **MCP2515_EFLG** - Error flags, see bit breakdown:
     > * MCP2515_EFLG_TXBO: Bus-Off Error: TEC reached 255, therefore controller has gone completely offline.  Clears when a bus-recovery event is successful.
     > * MCP2515_EFLG_TXEP: Transmit Error-Passive Flag bit; TEC is >= 128
     > * MCP2515_EFLG_RXEP: Receive Error-Passive Flag bit; REC is >= 128
@@ -229,17 +229,17 @@ Advanced features of the MCP2515 are configured using the _can_ioctl()_ function
 to abort all message transmissions that may be in progress, enabling rollover of RXB0 contents to RXB1 in the event of an overflow, configuring
 wakeup mode and setting alternative operational modes in the transceiver.
 
-* int can_ioctl(uint8_t option, uint8_t val)
+* **int** can_ioctl( **uint8_t** option, **uint8_t** val )
 
     > Configure option with value.  A full manifest includes:
-    > * MCP2515_OPTION_ROLLOVER - Allow RXB0 messages to roll over into RXB1 if overflow occurs (val = 0 or 1, default 0)
-    > * MCP2515_OPTION_ONESHOT - TX messages will only be attempted once; if they are aborted by arbitration, no error is registered but the frame is not re-sent. (val = 0 or 1, default 0)
-    > * MCP2515_OPTION_ABORT - Abort all pending TX buffer transmits.  (val = 0 or 1, default 0)
-    > * MCP2515_OPTION_CLOCKOUT - Output the controller's clock signal on the CLKOUT pin.  val = 0 turns this off, 1-4 specifies clock divider as 2^(val-1).  Default is 0 (off).
-    > * MCP2515_OPTION_LOOPBACK - Enter _LOOPBACK_ mode.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
-    > * MCP2515_OPTION_LISTEN_ONLY - Enter _LISTEN_ONLY_ mode.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
-    > * MCP2515_OPTION_SLEEP - Enter _SLEEP_ mode.  Controller's oscillator is disabled, it uses lower power but it may be woken up if WAKE is active.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
-    > * MCP2515_OPTION_MULTISAMPLE - During receives, the bit value is sampled 3 times instead of 1 to verify integrity.  (val = 0 or 1, default is 0)
-    > * MCP2515_OPTION_SOFOUT - On the CLKOUT pin, output a signal indicating the edge of a Start of Frame event indicating a new message is coming through the RX engine.  val = 0 or 1, it must be 0 for the CLOCKOUT feature to work.  Default is 0.
-    > * MCP2515_OPTION_WAKE - Enable WAKIE, allowing detection of a Start of Frame event during _SLEEP_ mode to trigger an IRQ.  This may be used to wake the CPU from a deep slumber.  (val = 0 or 1, default is 0)
-    > * MCP2515_OPTION_WAKE_GLITCH_FILTER - In _SLEEP_ mode, enable a low-pass filter on the CAN_RX line to prevent invalid noise on the line from triggering the WAKEUP IRQ.  (val = 0 or 1)
+    > * **MCP2515_OPTION_ROLLOVER** - Allow RXB0 messages to roll over into RXB1 if overflow occurs (val = 0 or 1, default 0)
+    > * **MCP2515_OPTION_ONESHOT** - TX messages will only be attempted once; if they are aborted by arbitration, no error is registered but the frame is not re-sent. (val = 0 or 1, default 0)
+    > * **MCP2515_OPTION_ABORT** - Abort all pending TX buffer transmits.  (val = 0 or 1, default 0)
+    > * **MCP2515_OPTION_CLOCKOUT** - Output the controller's clock signal on the CLKOUT pin.  val = 0 turns this off, 1-4 specifies clock divider as 2^(val-1).  Default is 0 (off).
+    > * **MCP2515_OPTION_LOOPBACK** - Enter _LOOPBACK_ mode.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
+    > * **MCP2515_OPTION_LISTEN_ONLY** - Enter _LISTEN_ONLY_ mode.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
+    > * **MCP2515_OPTION_SLEEP** - Enter _SLEEP_ mode.  Controller's oscillator is disabled, it uses lower power but it may be woken up if WAKE is active.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
+    > * **MCP2515_OPTION_MULTISAMPLE** - During receives, the bit value is sampled 3 times instead of 1 to verify integrity.  (val = 0 or 1, default is 0)
+    > * **MCP2515_OPTION_SOFOUT** - On the CLKOUT pin, output a signal indicating the edge of a Start of Frame event indicating a new message is coming through the RX engine.  val = 0 or 1, it must be 0 for the CLOCKOUT feature to work.  Default is 0.
+    > * **MCP2515_OPTION_WAKE** - Enable WAKIE, allowing detection of a Start of Frame event during _SLEEP_ mode to trigger an IRQ.  This may be used to wake the CPU from a deep slumber.  (val = 0 or 1, default is 0)
+    > * **MCP2515_OPTION_WAKE_GLITCH_FILTER** - In _SLEEP_ mode, enable a low-pass filter on the CAN_RX line to prevent invalid noise on the line from triggering the WAKEUP IRQ.  (val = 0 or 1)
