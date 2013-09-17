@@ -23,6 +23,9 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
     > to account for longer cable runs.  The second option specifies the maximum number of time slices the
     > controller may shift its receive parser to account for clock skew or jitter in remote controllers.
     >
+    > This function will attempt to match the speed as best as possible, using clock dividers and timeslice window
+    > adjustments.  But if it's not possible to match the intended speed, -1 will be returned.
+    >
     > Return value: 0 if success, -1 if error
 
 * **int** can_rx_setmask( **uint8_t** maskid, **uint32_t** msgmask, **uint8_t** is_ext )
