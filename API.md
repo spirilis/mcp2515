@@ -140,8 +140,8 @@ the value has MCP2515_IRQ_ERROR _cleared_ but has MCP2515_IRQ_RX _set_.  This in
 _can_recv()_ right away to grab it before a new message comes through and overwrites the old buffer contents.
 
 After verifying no pending RX events are here, it is possible (for lazy & simple apps) to merely check if the MCP2515_IRQ_HANDLED bit is
-set.  If it is, quit looking at the CAN events and continue on with your main loop.  You should run _can_irq_handler()_ again to check
-if other events are pending or if it's possible to put the CPU to sleep.  Be sure MCP2515_IRQ_FLAGGED is not still set in mcp2515_irq
+set.  If it is, quit looking at the IRQ handler return value and continue on with your main loop.  You should run _can_irq_handler()_ again
+to check if other events are pending or if it's possible to put the CPU to sleep.  Be sure MCP2515_IRQ_FLAGGED is not still set in mcp2515_irq
 before entering any Low-Power sleep modes.
 
 However, if you want to know further information, test the MCP2515_IRQ_TX and MCP2515_IRQ_ERROR bits.  MCP2515_IRQ_TX without a corresponding
