@@ -328,7 +328,7 @@ int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
 	uint8_t canintf, msginbuf[13];
 	int rxb = -1;
 
-	// 1. Any of them have unread data?
+	// Any of them have unread data?
 	can_r_reg(MCP2515_CANINTF, &canintf, 1);
 	if (canintf & MCP2515_CANINTF_RX0IF)
 		rxb = 0;
@@ -337,14 +337,7 @@ int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
 	if (rxb < 0)
 		return -1;
 
-	// 2. Make sure we're in the right operational mode
-	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_NORMAL &&
-		 (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_LOOPBACK &&
-		 (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_LISTEN_ONLY ) {
-		mcp2515_ctrl &= ~MCP2515_CANCTRL_REQOP_MASK;
-		can_w_reg(MCP2515_CANCTRL, &mcp2515_ctrl, 1);
-	}
-
+	// Pull down the message
 	can_r_rxbuf(MCP2515_RXBUF_RXB0SIDH + 0x04*rxb, msginbuf, 13);
 	*msgid = can_parse_msgid(msginbuf);
 	if (msginbuf[1] & 0x04)

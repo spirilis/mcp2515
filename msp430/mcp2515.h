@@ -2,6 +2,8 @@
 #ifndef MCP2515_H
 #define MCP2515_H
 
+#include <stdint.h>
+
 /* User configuration */
 #define CAN_SPI_CS_PORTBIT BIT0
 #define CAN_SPI_CS_PORTOUT P2OUT
@@ -354,8 +356,10 @@ int can_recv(uint32_t *, uint8_t *, void *);
 int can_rx_pending();
 int can_rx_setmask(uint8_t, uint32_t, uint8_t);
 int can_rx_setfilter(uint8_t, uint8_t, uint32_t);
+int can_rx_mode(uint8_t, uint8_t);
 int can_ioctl(uint8_t, uint8_t);
 int can_read_error(uint8_t);
+int can_irq_handler();
 
 
 #endif

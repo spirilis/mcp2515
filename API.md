@@ -195,7 +195,7 @@ malformed to its recipients.  When transmits or receives are cut short by error 
 these counters reach certain watermarks, the controller will automatically take itself offline to avoid adversely impacting the
 other surviving nodes on the bus, under the assumption it is this controller that is at fault rather than others.  These conditions
 will produce Bus Error conditions through the library's _can_irq_handler()_ return value; MCP2515_IRQ_ERROR set without any other
-bits (and MCP2515_IRQ_HANDLED will be cleared).
+bits (and MCP2515_IRQ_HANDLED cleared).
 
 To analyze bus errors that are not directly related to our TX or RX operations, the _can_read_error()_ function was provided to read
 the necessary EFLG (Error Flag), TEC (Transmit Error Counter) and REC (Receiver Error Counter) registers.
