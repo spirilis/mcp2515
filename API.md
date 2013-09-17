@@ -65,8 +65,12 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
 A single function, _can_recv()_ can be used to obtain the next available piece of data.  It scans the RX buffer interrupt flags
 in order of 0, 1 (remember; RXB0 is considered "higher priority") in search for pending data.  Upon reading the frame, its contents
 are copied to user-supplied buffers & variables and the function returns the length of the data frame.  As an advanced feature,
-the return value may have 0x40 OR'd to its value indicating the frame was a Request to Read; RTR in Extended frames or SRR in Standard
+the return value may have 0x40 OR'd to its value indicating the frame was a Remote Transfer Request; called RTR in Extended frames or SRR in Standard
 frames.  As a result, the return value of this function should be AND'ed with 0x0F before trusting it as an actual data length.
+Should an RTR or SRR come through, if this node is the expected manager of that message ID's logical function then it will be your firmware's job
+to send a message with this same msgid containing the appropriate data.  Note that this feature is no longer recommended for use (per the book
+"Controller Area Network Projects" by Dogan Ibrahim).  If you never expect to see or use this feature, just be sure to AND the
+return value with 0x0F every time.
 
 * int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
 
@@ -85,3 +89,66 @@ frames.  As a result, the return value of this function should be AND'ed with 0x
 
 ## Transmitting Data ##
 
+Data transmission is designed to be simple with this library; while there are 3 separate TX buffers available, the library
+will choose the next available one.  Note that transmits are considered asynchronous; while a TX buffer might be filled
+and the Request to Send command was submitted to the controller, the controller is at the mercy of the CAN bus state as to
+when it can actually send.  Once messages are sent, the IRQ handler must be executed upon receiving the IRQ signal so that it
+may free the affected TX buffer to make room for new outgoing messages.
+
+Transmit buffers have a 2-bit priority which gives the MCP2515 a way to sort the pending TX messages to determine which should
+go first; the user must provide this.  Higher numbers mean higher priority.
+
+Messages are sent with a message ID, Extended vs. Standard mode selected, a data payload and priority setting.  Optionally,
+a second function called _can_query()_ can use the RTR or SRR feature to request that a remote node managing a particular message ID
+provide an update (another frame should be received shortly with that same message ID and the requisite data contents).
+
+* int can_send(uint32_t msg, uint8_t is_ext, void *buf, uint8_t len, uint8_t prio)
+
+    > Send a message on the next available TX buffer.  Up to 29-bit message ID, Std. vs Ext. mode supported,
+    > length can be from 0 to 8 and priority from 0 to 3.  Upon data transmission, the TX IRQ may be set and you must
+    > execute the IRQ handler (_can_irq_handler()_) to free that buffer for a new message.  If an error occurs, the buffer
+    > will be freed too.
+    >
+    > Return value: TX buffer# if success, -1 if no available TX buffer slots
+
+* int can_query(uint32_t msg, uint8_t is_ext, uint8_t prio)
+
+    > Send an RTR or SRR (Remote Transfer Request) frame for the indicated message ID.  There is no data payload; a 0-byte
+    > frame is sent with the RTR (extended message) or SRR (standard message) bit set.  The recipient of this message is
+    > supposed to transmit a followup message with this same message ID containing a data payload.  It is used to passively
+    > query the state of a remote node's data.  Note this feature is no longer recommended for use (per the book "Controller Area
+    > Network Projects" by Dogan Ibrahim).
+    >
+    > Return value: TX buffer# if success, -1 if no available TX buffer slots
+
+## IRQ Handling ##
+
+IRQ handling is a critical part of using this library and the _can_irq_handler()_ function is a jack-of-many-trades that handles
+most errors and successful events itself, communicating with the user by way of its return value and a global _mcp2515_irq_ variable,
+which notifies you that all IRQ events have been handled by way of the _MCP2515_IRQ_FLAGGED_ bit.
+
+Upon receiving a HIGH-to-LOW transition on the MCP2515's IRQ pin, your firmware must OR the mcp2515_irq variable with MCP2515_IRQ_FLAGGED.
+It should wake up the main CPU if it is asleep, and part of your main loop should include a check to see if mcp2515_irq & MCP2515_IRQ_FLAGGED
+is non-zero.  If it is, run _can_irq_handler()_ right away and analyze its return value.  This function will only handle 1 event at a time,
+and multiple events might be pending which require subsequent repeated calls to _can_irq_handler()_.  The way you deal with this is by
+checking the state of "mcp2515_irq & MCP2515_IRQ_FLAGGED" to see if it has cleared before entering any Low-Power sleep modes.  Once you
+run _can_irq_handler()_ with no events actually pending, this flag will be cleared and your app will know it is free to go to sleep.
+
+The return value of _can_irq_handler()_ contains a bitmap of values.  The very first condition that should be watched is whether
+the value has MCP2515_IRQ_ERROR _cleared_ but has MCP2515_IRQ_RX _set_.  This indicates a received message is pending; you should run
+_can_recv()_ right away to grab it before a new message comes through and overwrites the old buffer contents.
+
+After verifying no pending RX events are here, it is possible (for lazy & simple apps) to merely check if the MCP2515_IRQ_HANDLED bit is
+set.  If it is, quit looking at the CAN events and continue on with your main loop.  Be sure MCP2515_IRQ_FLAGGED is not set in mcp2515_irq
+before entering any Low-Power sleep modes.
+
+However, if you want to know further information, test the MCP2515_IRQ_TX and MCP2515_IRQ_ERROR bits.  MCP2515_IRQ_TX without a corresponding
+MCP2515_IRQ_ERROR bit indicates that one of the TX buffers has successfully transmitted its message and that buffer is now available.  You
+may send another message after this.  If you are curious, the variable _mcp2515_buf_ contains the TXB that completed its transmit.
+
+The MCP2515_IRQ_ERROR bit indicates one of many error conditions are present.  A breakdown of these is provided:
+
+* MCP2515_IRQ_ERROR alone means Bus Error; use _can_read_error(MCP2515_EFLG)_ to get more detail.
+* MCP2515_IRQ_ERROR with MCP2515_IRQ_RX means a message was in the process of being received but an error occurred.  Nothing more needs to be
+  done here.
+* MCP2515_IRQ_ERROR with MCP2515_IRQ_TX means a transmit failed.  _mcp2515_buf_ contains the TXB# affected.
