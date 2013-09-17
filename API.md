@@ -64,9 +64,12 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
 
 A single function, _can_recv()_ can be used to obtain the next available piece of data.  It scans the RX buffer interrupt flags
 in order of 0, 1 (remember; RXB0 is considered "higher priority") in search for pending data.  Upon reading the frame, its contents
-are copied to user-supplied buffers & variables and the function returns the length of the data frame.  As an advanced feature,
-the return value may have 0x40 OR'd to its value indicating the frame was a Remote Transfer Request; called RTR in Extended frames or SRR in Standard
-frames.  As a result, the return value of this function should be AND'ed with 0x0F before trusting it as an actual data length.
+are copied to user-supplied buffers & variables and the function returns the length of the data frame.
+
+As an advanced feature, the return value may have 0x40 OR'd to its value indicating the frame was a Remote Transfer Request;
+called RTR in Extended frames or SRR in Standard frames.  As a result, the return value of this function should be AND'ed with 0x0F
+before trusting it as an actual data length.
+
 Should an RTR or SRR come through, if this node is the expected manager of that message ID's logical function then it will be your firmware's job
 to send a message with this same msgid containing the appropriate data.  Note that this feature is no longer recommended for use (per the book
 "Controller Area Network Projects" by Dogan Ibrahim).  If you never expect to see or use this feature, just be sure to AND the
@@ -90,10 +93,10 @@ return value with 0x0F every time.
 ## Transmitting Data ##
 
 Data transmission is designed to be simple with this library; while there are 3 separate TX buffers available, the library
-will choose the next available one.  Note that transmits are considered asynchronous; while a TX buffer might be filled
-and the Request to Send command was submitted to the controller, the controller is at the mercy of the CAN bus state as to
-when it can actually send.  Once messages are sent, the IRQ handler must be executed upon receiving the IRQ signal so that it
-may free the affected TX buffer to make room for new outgoing messages.
+will choose the next available one and keep track of which are in use.  Note that transmits are considered asynchronous;
+while a TX buffer might be filled and the Request to Send command was submitted to the controller, the controller is at the
+mercy of the CAN bus state as to when it can actually send.  Once messages are sent, the IRQ handler must be executed upon
+receiving the IRQ signal so that it may free the affected TX buffer to make room for new outgoing messages.
 
 Transmit buffers have a 2-bit priority which gives the MCP2515 a way to sort the pending TX messages to determine which should
 go first; the user must provide this.  Higher numbers mean higher priority.
@@ -102,7 +105,7 @@ Messages are sent with a message ID, Extended vs. Standard mode selected, a data
 a second function called _can_query()_ can use the RTR or SRR feature to request that a remote node managing a particular message ID
 provide an update (another frame should be received shortly with that same message ID and the requisite data contents).
 
-* **int** can_send( **uint32_t** msg, **uint8_t** is_ext, **void** *buf, **uint8_t** len, **uint8_t** prio )
+* **int** can_send( **uint32_t** msg, **uint8_t** is_ext, **void** \*buf, **uint8_t** len, **uint8_t** prio )
 
     > Send a message on the next available TX buffer.  Up to 29-bit message ID, Std. vs Ext. mode supported,
     > length can be from 0 to 8 and priority from 0 to 3.  Upon data transmission, the TX IRQ may be set and you must
