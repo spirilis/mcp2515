@@ -72,7 +72,7 @@ to send a message with this same msgid containing the appropriate data.  Note th
 "Controller Area Network Projects" by Dogan Ibrahim).  If you never expect to see or use this feature, just be sure to AND the
 return value with 0x0F every time.
 
-* **int** can_recv( **uint32_t** *msgid, **uint8_t** *is_ext, **void** *buf )
+* **int** can_recv( **uint32_t** \*msgid, **uint8_t** \*is_ext, **void** \*buf )
 
     > Retrieve the message from the first pending RX buffer, clearing its _CANINTF_ IRQ flag when complete.  The message ID for this
     > message will be stored in the user-supplied **uint32_t variable** (you must provide a pointer to that) and the Std. vs Ext. message
