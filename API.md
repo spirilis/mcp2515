@@ -127,28 +127,31 @@ IRQ handling is a critical part of using this library and the _can_irq_handler()
 most errors and successful events itself, communicating with the user by way of its return value and a global _mcp2515_irq_ variable,
 which notifies you that all IRQ events have been handled by way of the _MCP2515_IRQ_FLAGGED_ bit.
 
-Upon receiving a HIGH-to-LOW transition on the MCP2515's IRQ pin, your firmware must OR the mcp2515_irq variable with MCP2515_IRQ_FLAGGED.
-It should wake up the main CPU if it is asleep, and part of your main loop should include a check to see if mcp2515_irq & MCP2515_IRQ_FLAGGED
+Upon receiving a HIGH-to-LOW transition on the MCP2515's IRQ pin, your firmware must bitwise-OR the mcp2515_irq variable with MCP2515_IRQ_FLAGGED.
+It should wake up the main CPU if it is asleep, and part of your main loop should include a check to see if (bitwise-AND) mcp2515_irq & MCP2515_IRQ_FLAGGED
 is non-zero.  If it is, run _can_irq_handler()_ right away and analyze its return value.  This function will only handle 1 event at a time,
 and multiple events might be pending which require subsequent repeated calls to _can_irq_handler()_.  The way you deal with this is by
 checking the state of "mcp2515_irq & MCP2515_IRQ_FLAGGED" to see if it has cleared before entering any Low-Power sleep modes.  Once you
 run _can_irq_handler()_ with no events actually pending, this flag will be cleared and your app will know it is free to go to sleep.
+It is critically important that your firmware does NOT clear the MCP2515_IRQ_FLAGGED bit from _mcp2515_irq_.
 
 The return value of _can_irq_handler()_ contains a bitmap of values.  The very first condition that should be watched is whether
 the value has MCP2515_IRQ_ERROR _cleared_ but has MCP2515_IRQ_RX _set_.  This indicates a received message is pending; you should run
 _can_recv()_ right away to grab it before a new message comes through and overwrites the old buffer contents.
 
 After verifying no pending RX events are here, it is possible (for lazy & simple apps) to merely check if the MCP2515_IRQ_HANDLED bit is
-set.  If it is, quit looking at the CAN events and continue on with your main loop.  Be sure MCP2515_IRQ_FLAGGED is not set in mcp2515_irq
+set.  If it is, quit looking at the CAN events and continue on with your main loop.  You should run _can_irq_handler()_ again to check
+if other events are pending or if it's possible to put the CPU to sleep.  Be sure MCP2515_IRQ_FLAGGED is not still set in mcp2515_irq
 before entering any Low-Power sleep modes.
 
 However, if you want to know further information, test the MCP2515_IRQ_TX and MCP2515_IRQ_ERROR bits.  MCP2515_IRQ_TX without a corresponding
 MCP2515_IRQ_ERROR bit indicates that one of the TX buffers has successfully transmitted its message and that buffer is now available.  You
-may send another message after this.  If you are curious, the variable _mcp2515_buf_ contains the TXB that completed its transmit.
+may send another message after this.  If you are curious, the variable _mcp2515_buf_ contains the TX buffer# that completed its transmit.
 
 The MCP2515_IRQ_ERROR bit indicates one of many error conditions are present.  A breakdown of these is provided:
 
-* MCP2515_IRQ_ERROR alone means Bus Error; use _can_read_error(MCP2515_EFLG)_ to get more detail.
+* MCP2515_IRQ_ERROR alone means Bus Error; use _can_read_error(MCP2515_EFLG)_ to get more detail.  See the Errors section below for more detail.
 * MCP2515_IRQ_ERROR with MCP2515_IRQ_RX means a message was in the process of being received but an error occurred.  Nothing more needs to be
   done here.
 * MCP2515_IRQ_ERROR with MCP2515_IRQ_TX means a transmit failed.  _mcp2515_buf_ contains the TXB# affected.
+
