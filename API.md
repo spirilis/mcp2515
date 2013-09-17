@@ -19,7 +19,7 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
 
     > Configure CAN speed.  **bitrate** is in Hz, maximum is _1000000_.  The other 2 options are advanced
     > CAN options and can be set to '1' (or '0' which is translated to '1' anyhow).  The first option,
-    > **propagation_segment_hint**, can go from '1' to '4' and provides extra time for the signal to propagate
+    > **propagation_segment_hint**, can be set 1-4 and provides extra time for the signal to propagate
     > to account for longer cable runs.  The second option specifies the maximum number of time slices the
     > controller may shift its receive parser to account for clock skew or jitter in remote controllers.
     >
@@ -131,7 +131,7 @@ provide an update (another frame should be received shortly with that same messa
 
 IRQ handling is a critical part of using this library and the _can_irq_handler()_ function is a jack-of-many-trades that handles
 most errors and successful events itself, communicating with the user by way of its return value and a global _mcp2515_irq_ variable,
-which notifies you that all IRQ events have been handled by way of the _MCP2515_IRQ_FLAGGED_ bit.
+which notifies you that more IRQ events are waiting by way of the _MCP2515_IRQ_FLAGGED_ bit.
 
 Upon receiving a HIGH-to-LOW transition on the MCP2515's IRQ pin, your firmware must bitwise-OR the mcp2515_irq variable with MCP2515_IRQ_FLAGGED.
 It should wake up the main CPU if it is asleep, and part of your main loop should include a check to see if (bitwise-AND) mcp2515_irq & MCP2515_IRQ_FLAGGED
