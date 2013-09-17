@@ -50,13 +50,13 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
     >
     > Return value: filtid if success, -1 if error
 
-* int can_rx_mode(uint8_t rxb, uint8_t mode)
+* **int can_rx_mode(uint8_t rxb, uint8_t mode)**
 
     > Set receive matching mode for the RX buffer#.  Options for _mode_ include:
-    > * MCP2515_RXB0CTRL_MODE_RECV_STD_OR_EXT - Receive either STD or EXT messages matching a filter (EXT message ID bits applied to first 2 data bytes for STD messages)
-    > * MCP2515_RXB0CTRL_MODE_RECV_STD - Receive only STD messages (EXT message ID bits applied to first 2 data bytes)
-    > * MCP2515_RXB0CTRL_MODE_RECV_EXT - Receive only EXT messages
-    > * MCP2515_RXB0CTRL_MODE_RECV_ALL - Receive any message, ignoring the filters
+    > * **MCP2515_RXB0CTRL_MODE_RECV_STD_OR_EXT** - Receive either STD or EXT messages matching a filter (EXT message ID bits applied to first 2 data bytes for STD messages)
+    > * **MCP2515_RXB0CTRL_MODE_RECV_STD** - Receive only STD messages (EXT message ID bits applied to first 2 data bytes)
+    > * **MCP2515_RXB0CTRL_MODE_RECV_EXT** - Receive only EXT messages
+    > * **MCP2515_RXB0CTRL_MODE_RECV_ALL** - Receive any message, ignoring the filters
     >
     > Return value: 0 if success, -1 if error
 
