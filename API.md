@@ -60,3 +60,28 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
     >
     > Return value: 0 if success, -1 if error
 
+## Receiving Data ##
+
+A single function, _can_recv()_ can be used to obtain the next available piece of data.  It scans the RX buffer interrupt flags
+in order of 0, 1 (remember; RXB0 is considered "higher priority") in search for pending data.  Upon reading the frame, its contents
+are copied to user-supplied buffers & variables and the function returns the length of the data frame.  As an advanced feature,
+the return value may have 0x40 OR'd to its value indicating the frame was a Request to Read; RTR in Extended frames or SRR in Standard
+frames.  As a result, the return value of this function should be AND'ed with 0x0F before trusting it as an actual data length.
+
+* int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
+
+    > Retrieve the message from the first pending RX buffer, clearing its CANINTF IRQ flag when complete.  The message ID for this
+    > message will be stored in the user-supplied uint32_t variable (you must provide a pointer to that) and the Std. vs Ext. message
+    > specifier is stored in the user's supplied is_ext variable; 0 = Standard, 1 = Extended.  The data contents are stored in the
+    > supplied buffer and the length of that data returned in the lower 4 bits of the function's return value.
+    >
+    > Return value: Data length possibly OR'd with 0x40 if RTR/SRR was set, -1 if no messages are pending.
+
+* int can_rx_pending()
+
+    > Simple function to determine if any RX IRQs are pending.
+    >
+    > Return value: RXB ID if any are pending, -1 if none are pending.
+
+## Transmitting Data ##
+
