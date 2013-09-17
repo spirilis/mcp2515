@@ -148,6 +148,10 @@ However, if you want to know further information, test the MCP2515_IRQ_TX and MC
 MCP2515_IRQ_ERROR bit indicates that one of the TX buffers has successfully transmitted its message and that buffer is now available.  You
 may send another message after this.  If you are curious, the variable _mcp2515_buf_ contains the TX buffer# that completed its transmit.
 
+The MCP2515_IRQ_WAKEUP bit is used during SLEEP mode.  If this is found, the IRQ handler automatically switches the controller to _NORMAL_
+mode and I/O may resume.  The message received that triggered this wakeup will be lost, along with anything else sent within a short
+interval (time used for stabilizing the MCP2515's clock crystal).
+
 The MCP2515_IRQ_ERROR bit indicates one of many error conditions are present.  A breakdown of these is provided:
 
 * MCP2515_IRQ_ERROR alone means Bus Error; use _can_read_error(MCP2515_EFLG)_ to get more detail.  See the Errors section below for more detail.
@@ -155,3 +159,87 @@ The MCP2515_IRQ_ERROR bit indicates one of many error conditions are present.  A
   done here.
 * MCP2515_IRQ_ERROR with MCP2515_IRQ_TX means a transmit failed.  _mcp2515_buf_ contains the TXB# affected.
 
+* int can_irq_handler()
+
+    > Pulls MCP2515_CANINTF and possibly MCP2515_EFLG to determine the current interrupt state of the controller.  Discovery of
+    > TX buffer# or RX buffer# is performed for the purpose of automatically clearing the IRQ (TX) or providing information about
+    > the RXB# (not typically used, but can be reported for debugging purposes).  A bitmap of values including:
+    > * MCP2515_IRQ_TX
+    > * MCP2515_IRQ_RX
+    > * MCP2515_IRQ_ERROR
+    > * MCP2515_IRQ_WAKEUP
+    > * MCP2515_IRQ_HANDLED
+    > may be returned indicating the reason.  MCP2515_IRQ_HANDLED is a lazy bit indicating the app does not need to go into
+    > great detail to analyze what just happened, but that it can loop around again through its main loop.  A bit called MCP2515_IRQ_FLAGGED
+    > is used as the ultimate signal to the user's firmware indicating that no more events are pending.  This bit is set by
+    > the user's firmware ISR for the MCP2515's IRQ line and cleared only by this function.  It must be tested and confirmed clear
+    > before the user's firmware enters any form of busy-wait or Low-Power sleep mode.
+    >
+    > Return value: Bitmap of IRQ handler information, 0 if no further events are waiting (MCP2515_IRQ_FLAGGED will be cleared from _mcp2515_irq_)
+
+## Errors and error handling ##
+
+The CAN bus is designed to be a fault-tolerant bus for reliable communication over distances up to 1km depending on speed.  Designed
+for automotive powertrain applications, it has a robust error-detection system designed to minimize the latency experienced during
+a fault of a single node.  Additionally, it employs prioritization based on message IDs which allow high-priority nodes to supercede
+lower-priority nodes through an arbitration scheme.  Lower-value message IDs supercede higher-value message IDs during arbitration.
+
+Part of the error detection and handling involves autonomous transmission of error frames during an event where a frame appears
+malformed to its recipients.  When transmits or receives are cut short by error frames, internal counters are incremented.  When
+these counters reach certain watermarks, the controller will automatically take itself offline to avoid adversely impacting the
+other surviving nodes on the bus, under the assumption it is this controller that is at fault rather than others.  These conditions
+will produce Bus Error conditions through the library's _can_irq_handler()_ return value; MCP2515_IRQ_ERROR set without any other
+bits (and MCP2515_IRQ_HANDLED will be cleared).
+
+To analyze bus errors that are not directly related to our TX or RX operations, the _can_read_error()_ function was provided to read
+the necessary EFLG (Error Flag), TEC (Transmit Error Counter) and REC (Receiver Error Counter) registers.
+
+* int can_read_error(uint8_t reg)
+
+    > Read the requisite error register and provide its contents.
+    > Valid registers include:
+    > * MCP2515_TEC - Transmit Error counter
+    > * MCP2515_REC - Receiver Error counter
+    > * MCP2515_EFLG - Error flags, see bit breakdown:
+    > * MCP2515_EFLG_TXBO: Bus-Off Error: TEC reached 255, therefore controller has gone completely offline.  Clears when a bus-recovery event is successful.
+    > * MCP2515_EFLG_TXEP: Transmit Error-Passive Flag bit; TEC is >= 128
+    > * MCP2515_EFLG_RXEP: Receive Error-Passive Flag bit; REC is >= 128
+    > * MCP2515_EFLG_TXWAR, RXWAR, EWARN: Requisite TEC, REC registers are >= 96, warning of impending disconnect due to bus errors
+    >
+    > Return value: contents of requested register or -1 if invalid register supplied.
+
+### Error modes ###
+The following error modes exist when erroneous frames are discovered:
+
+* Error-Active: TEC or REC is below key watermarks, normal transmit and receive may occur.
+* Error-Passive: TEC or REC has exceeded 127, message transmits and error frame transmits (automatically supplied by the MCP2515) may occur.
+* Bus-Off: TEC has hit 255, requiring the controller to go completely offline for all transmits and receives.
+
+Correct receiving of 11 consecutive "recessive" bits during Bus-Off mode resets the controller so that it may resume Error-Active mode.
+This indicates the bus has "calmed down".
+
+If the controller repeatedly enters Bus-Off mode, it is the user firmware's responsibility to treat this as a genuine problem with this node
+and this node should go offline to avoid monopolizing the bus with denial-of-service.  It might be prudent to implement a delay, fixed or
+random, every time the controller finds itself in Bus-Off mode before checking whether it can perform transmits (Error-Active mode) again.
+Obviously if a message is received during this window, the firmware should handle it.
+
+## Advanced Configuration ##
+
+Advanced features of the MCP2515 are configured using the _can_ioctl()_ function.  These include esoteric features of TX mode, a command
+to abort all message transmissions that may be in progress, enabling rollover of RXB0 contents to RXB1 in the event of an overflow, configuring
+wakeup mode and setting alternative operational modes in the transceiver.
+
+* int can_ioctl(uint8_t option, uint8_t val)
+
+    > Configure option with value.  A full manifest includes:
+    > * MCP2515_OPTION_ROLLOVER - Allow RXB0 messages to roll over into RXB1 if overflow occurs (val = 0 or 1, default 0)
+    > * MCP2515_OPTION_ONESHOT - TX messages will only be attempted once; if they are aborted by arbitration, no error is registered but the frame is not re-sent. (val = 0 or 1, default 0)
+    > * MCP2515_OPTION_ABORT - Abort all pending TX buffer transmits.  (val = 0 or 1, default 0)
+    > * MCP2515_OPTION_CLOCKOUT - Output the controller's clock signal on the CLKOUT pin.  val = 0 turns this off, 1-4 specifies clock divider as 2^(val-1).  Default is 0 (off).
+    > * MCP2515_OPTION_LOOPBACK - Enter _LOOPBACK_ mode.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
+    > * MCP2515_OPTION_LISTEN_ONLY - Enter _LISTEN_ONLY_ mode.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
+    > * MCP2515_OPTION_SLEEP - Enter _SLEEP_ mode.  Controller's oscillator is disabled, it uses lower power but it may be woken up if WAKE is active.  val = 0 or 1, with 0 causing controller to switch to _NORMAL_ mode.
+    > * MCP2515_OPTION_MULTISAMPLE - During receives, the bit value is sampled 3 times instead of 1 to verify integrity.  (val = 0 or 1, default is 0)
+    > * MCP2515_OPTION_SOFOUT - On the CLKOUT pin, output a signal indicating the edge of a Start of Frame event indicating a new message is coming through the RX engine.  val = 0 or 1, it must be 0 for the CLOCKOUT feature to work.  Default is 0.
+    > * MCP2515_OPTION_WAKE - Enable WAKIE, allowing detection of a Start of Frame event during _SLEEP_ mode to trigger an IRQ.  This may be used to wake the CPU from a deep slumber.  (val = 0 or 1, default is 0)
+    > * MCP2515_OPTION_WAKE_GLITCH_FILTER - In _SLEEP_ mode, enable a low-pass filter on the CAN_RX line to prevent invalid noise on the line from triggering the WAKEUP IRQ.  (val = 0 or 1)
