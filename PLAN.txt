@@ -1,0 +1,26 @@
+Transmissions:
+	send():
+	Managed function that selects next available TXB, takes uint32_t msgid + data buffer + data count + message priority
+	- Tags a TXB as in use, irq handler for TXB IRQs will untag it later
+	- Sends RTS command over SPI
+	- Replies with TXB# used.
+	query() sends a message on next available TXB with RTR enabled.
+
+IRQ handler:
+	- Notifies of latest issue
+	- irq handler function manages the MCP2515_IRQ_FLAGGED state; user should not do so except setting in an IRQ firing.
+	- Replies a bitmap of MCP2515_IRQ_TX, RX, WAKEUP, ERROR, HANDLED
+	- HANDLED can be used as a shortcut to indicate nothing further is needed
+	- ERROR alone means a bus error; can_read_error(MCP2515_EFLG) can indicate which
+	- ERROR + RX means MERRF or overflow
+	- ERROR + TX means MERRF
+	- RX means one of the buffers has new data (mcp2515_buf says which)
+	- TX means the latest TX completed (mcp2515_buf says which)
+
+Receives:
+	rx_pending() function checks if anything is available
+	recv() doesn't care about RXB#, just replies with data length & populates data buffer + uint32_t msgid
+	ioctl() with some options - ROLLOVER, standard-only vs. standard+extended msgid reception
+	setmask() sets 1 of the 2 acceptance masks
+	setfilter() takes an RXB#, a filter# and a filter
+
