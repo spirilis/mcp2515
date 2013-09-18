@@ -15,7 +15,7 @@ $(PROG).elf:	$(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG).elf $(LIBSRCS) $(PROG).c
 
 clean:
-	-rm -f $(PROG).elf
+	-rm -f *.elf
 
 install: $(PROG).elf
 	$(MSPDEBUG) -n rf2500 "prog $(PROG).elf"

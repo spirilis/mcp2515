@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 /* User configuration */
-#define CAN_SPI_CS_PORTBIT BIT0
+#define CAN_SPI_CS_PORTBIT BIT2
 #define CAN_SPI_CS_PORTOUT P2OUT
 #define CAN_SPI_CS_PORTDIR P2DIR
 
@@ -13,6 +13,7 @@
 #define CAN_IRQ_PORTOUT P1OUT
 #define CAN_IRQ_PORTDIR P1DIR
 #define CAN_IRQ_PORTREN P1REN
+#define CAN_IRQ_PORTIES P1IES
 #define CAN_IRQ_PORTIE P1IE
 #define CAN_IRQ_PORTIFG P1IFG
 

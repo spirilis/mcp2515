@@ -7,7 +7,7 @@
 
 uint32_t rid;
 uint8_t mext;
-uint8_t irq, buf[8];
+uint8_t irq, buf[8], buf2[16];
 volatile int i;
 volatile uint16_t sleep_counter;
 #define SLEEP_COUNTER 7
@@ -36,7 +36,11 @@ int main()
 	can_rx_setfilter(0, 0, 0x00000080);
 	can_rx_mode(0, MCP2515_RXB0CTRL_MODE_RECV_STD_OR_EXT);
 
-	can_ioctl(MCP2515_OPTION_SLEEP, 0);  // NORMAL mode
+	can_ioctl(MCP2515_OPTION_LOOPBACK, 1);
+	can_ioctl(MCP2515_OPTION_ONESHOT, 1);
+
+	for (i=0; i < 16; i++)
+		can_r_reg(i * 16, buf2, 16);
 
 	WDTCTL = WDT_ADLY_16;
 	IFG1 &= ~WDTIFG;
@@ -70,13 +74,20 @@ int main()
 		}
 
 		if (!sleep_counter) {
-			buf[0] = '0';
-			can_send(0x00000080, 1, buf, 1, 3);
+			buf[0] = '1';
+			buf[1]++;
+			if (can_send(0x00000080, 1, buf, 1, 3) < 0) {
+				//P1OUT |= BIT0;
+			} else {
+				//P1OUT &= ~BIT0;
+			}
 			sleep_counter = SLEEP_COUNTER;
 		}
 
-		if ( !(mcp2515_irq & MCP2515_IRQ_FLAGGED) )
+		if ( !(mcp2515_irq & MCP2515_IRQ_FLAGGED) ) {
+			P1OUT ^= BIT0;
 			LPM3;
+		}
 	}
 	return 0;
 }
@@ -90,4 +101,15 @@ __interrupt void WDT_ISR(void)
 		sleep_counter--;
 	else
 		__bic_SR_register_on_exit(LPM3_bits);
+}
+
+// ISR for PORT1
+#pragma vector=PORT1_VECTOR
+__interrupt void P1_ISR(void)
+{
+	if (P1IFG & CAN_IRQ_PORTBIT) {
+		P1IFG &= ~CAN_IRQ_PORTBIT;
+		mcp2515_irq |= MCP2515_IRQ_FLAGGED;
+		__bic_SR_register_on_exit(LPM3_bits);
+	}
 }

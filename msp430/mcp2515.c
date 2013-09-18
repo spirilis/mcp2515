@@ -15,8 +15,8 @@ volatile uint8_t mcp2515_irq, mcp2515_buf;
 
 /* SPI I/O */
 
-#define CAN_CS_LOW CAN_SPI_CS_PORTDIR &= ~CAN_SPI_CS_PORTBIT
-#define CAN_CS_HIGH CAN_SPI_CS_PORTDIR |= CAN_SPI_CS_PORTBIT
+#define CAN_CS_LOW CAN_SPI_CS_PORTOUT &= ~CAN_SPI_CS_PORTBIT
+#define CAN_CS_HIGH CAN_SPI_CS_PORTOUT |= CAN_SPI_CS_PORTBIT
 
 void can_spi_command(uint8_t cmd)
 {
@@ -95,7 +95,7 @@ void can_r_rxbuf(uint8_t bufid, void *buf, uint8_t len)
 	CAN_CS_LOW;
 	spi_transfer(MCP2515_SPI_READ_RXBUF | (bufid & 0x06));
 	for (i=0; i < len; i++) {
-		spi_transfer(sbuf[i]);
+		sbuf[i] = spi_transfer(0xFF);
 	}
 	CAN_CS_HIGH;
 }
@@ -115,11 +115,13 @@ void can_init()
 	CAN_IRQ_PORTDIR &= ~CAN_IRQ_PORTBIT;
 	CAN_IRQ_PORTREN |= CAN_IRQ_PORTBIT;
 	CAN_IRQ_PORTOUT |= CAN_IRQ_PORTBIT;
+	CAN_IRQ_PORTIES |= CAN_IRQ_PORTBIT;
 	CAN_IRQ_PORTIFG &= ~CAN_IRQ_PORTBIT;
 	CAN_IRQ_PORTIE |= CAN_IRQ_PORTBIT;
 
 	spi_init();
 	can_spi_command(MCP2515_SPI_RESET);
+	__delay_cycles(16000);
 
 	mcp2515_ctrl = MCP2515_CANCTRL_REQOP_CONFIGURATION;
 	can_w_reg(MCP2515_CANCTRL, &mcp2515_ctrl, 1);
@@ -128,6 +130,8 @@ void can_init()
 	can_w_reg(MCP2515_CANINTE, &ie, 1);
 
 	mcp2515_irq = 0x00;
+
+	_EINT();
 }
 
 /* Bitrate in Hz
@@ -179,7 +183,8 @@ int can_speed(uint32_t bitrate, uint8_t propseg_hint, uint8_t syncjump)
 		syncjump = tq_ps2 - 1;
 
 	// Configure BRP, SJW, TQ_PropSeg, TQ_PS1, TQ_PS2
-	can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
+	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
+		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
 
 	c = (brp & 0x3F) | ((syncjump - 1) << 6);
 	can_w_reg(MCP2515_CNF1, &c, 1);
@@ -269,7 +274,7 @@ int can_send(uint32_t msg, uint8_t is_ext, void *buf, uint8_t len, uint8_t prio)
 	can_w_txbuf(MCP2515_TXBUF_TXB0SIDH + 2*txb, outbuf, 5+len);
 	can_w_bit(MCP2515_TXB0CTRL + 0x10*txb, MCP2515_TXBCTRL_TXREQ, MCP2515_TXBCTRL_TXREQ);
 	can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << txb, MCP2515_CANINTE_TX0IE << txb);
-	can_spi_command(MCP2515_SPI_RTS);  // Initiate transmission
+	can_spi_command(MCP2515_SPI_RTS | mcp2515_txb);  // Initiate transmission
 
 	return txb;
 }
@@ -376,7 +381,8 @@ int can_rx_setmask(uint8_t maskid, uint32_t msgmask, uint8_t is_ext)
 	if (maskid > 1)
 		return -1;
 	
-	can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
+	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
+		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
 
 	if (is_ext)
 		can_compose_msgid_ext(msgmask, maskbuf);
@@ -385,7 +391,9 @@ int can_rx_setmask(uint8_t maskid, uint32_t msgmask, uint8_t is_ext)
 	
 	can_w_reg(MCP2515_RXM0SIDH + maskid * 0x04, maskbuf, 4);
 
-	can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, mcp2515_ctrl);
+	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
+		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, mcp2515_ctrl);
+
 	return maskid;
 }
 
@@ -403,7 +411,8 @@ int can_rx_setfilter(uint8_t rxb, uint8_t filtid, uint32_t msgid)
 	if (filtid > 2)
 		return -1;
 	
-	can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
+	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
+		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
 
 	filtid += 2*rxb;
 	can_r_reg(MCP2515_RXM0SIDL + rxb*0x04, &mask, 1);
@@ -417,7 +426,9 @@ int can_rx_setfilter(uint8_t rxb, uint8_t filtid, uint32_t msgid)
 	else
 		can_w_reg(MCP2515_RXF3SIDH + (filtid-3) * 0x04, idbuf, 4);
 	
-	can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, mcp2515_ctrl);
+	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
+		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, mcp2515_ctrl);
+
 	return filtid;
 }
 
@@ -580,11 +591,21 @@ int can_irq_handler()
 	int i;
 	uint8_t ifg, eflg, ie, txbctrl;
 
-	mcp2515_irq &= ~MCP2515_IRQ_FLAGGED;  // Clear everything but the flagged bit.
+	mcp2515_irq &= MCP2515_IRQ_FLAGGED;  // Clear everything but the flagged bit.
 	// Read CANINTF to get started
 	can_r_reg(MCP2515_CANINTF, &ifg, 1);
 
-	// TX IRQ?
+	// RX success IRQ?
+	if (ifg & (MCP2515_CANINTF_RX0IF | MCP2515_CANINTF_RX1IF)) {
+		if (ifg & MCP2515_CANINTF_RX0IF)
+			mcp2515_buf = 0;
+		else
+			mcp2515_buf = 1;
+		mcp2515_irq |= MCP2515_IRQ_RX;
+		return MCP2515_IRQ_RX;
+	}
+
+	// TX success IRQ?
 	if (ifg & (MCP2515_CANINTF_TX0IF | MCP2515_CANINTF_TX1IF | MCP2515_CANINTF_TX2IF)) {
 		for (i=0; i < 2; i++) {
 			if (ifg & (MCP2515_CANINTF_TX0IF << i)) {
@@ -596,16 +617,6 @@ int can_irq_handler()
 				return MCP2515_IRQ_TX | MCP2515_IRQ_HANDLED;
 			}
 		}
-	}
-
-	// RX success IRQ?
-	if (ifg & (MCP2515_CANINTF_RX0IF | MCP2515_CANINTF_RX1IF)) {
-		if (ifg & MCP2515_CANINTF_RX0IF)
-			mcp2515_buf = 0;
-		else
-			mcp2515_buf = 1;
-		mcp2515_irq |= MCP2515_IRQ_RX;
-		return MCP2515_IRQ_RX;
 	}
 
 	// Wake up?

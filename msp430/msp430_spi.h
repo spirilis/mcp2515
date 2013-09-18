@@ -20,7 +20,7 @@
 
 /* User configuration */
 //#define SPI_DRIVER_USCI_A 1
-#define SPI_DRIVER_USCI_A 1
+#define SPI_DRIVER_USCI_B 1
 
 #include <stdint.h>
 

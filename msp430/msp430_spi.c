@@ -25,7 +25,6 @@
 #include <msp430.h>
 #include "msp430_spi.h"
 
-
 #ifdef __MSP430_HAS_USI__
 void spi_init()
 {
