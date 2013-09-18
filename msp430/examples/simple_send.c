@@ -10,7 +10,7 @@ uint8_t mext;
 uint8_t irq, buf[8], buf2[16];
 volatile int i;
 volatile uint16_t sleep_counter;
-#define SLEEP_COUNTER 7
+#define SLEEP_COUNTER 20
 
 int main()
 {
@@ -54,21 +54,23 @@ int main()
 				if (i > 0) {
 					if (buf[0] == '1') {
 						P1OUT |= BIT0;
-						__delay_cycles(8000000);
+						__delay_cycles(800000);
 						P1OUT &= ~BIT0;
-						__delay_cycles(8000000);
+						__delay_cycles(800000);
 						P1OUT |= BIT0;
-						__delay_cycles(8000000);
+						__delay_cycles(800000);
 						P1OUT &= ~BIT0;
-						__delay_cycles(8000000);
+						__delay_cycles(800000);
 					}
 				}
 			} else if (irq & MCP2515_IRQ_ERROR) {
+				can_r_reg(MCP2515_CANINTF, &mext, 1);
+				can_r_reg(MCP2515_EFLG, &mext, 1);
 				while(1) {
 					P1OUT |= BIT0;
-					__delay_cycles(800000);
+					__delay_cycles(400000);
 					P1OUT &= ~BIT0;
-					__delay_cycles(800000);
+					__delay_cycles(400000);
 				}
 			}
 		}
