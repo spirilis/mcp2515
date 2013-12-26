@@ -201,6 +201,26 @@ int can_speed(uint32_t bitrate, uint8_t propseg_hint, uint8_t syncjump)
 /* Standard IDs can contain extended bits, but EXIDE is cleared.  This is to support
  * masks on standard IDs that allow the Extended ID portion to act as a filter on the first
  * 16-bits of the data.
+ *
+ *
+ *  CAN message ID chart
+ *  +-----------------------------------------------------------------------------------------------+
+ *  |31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0|
+ *  +-----------------------------------------------------------------------------------------------+
+ *    8  4  2  1  8  4  2  1  8  4  2  1  8  4  2  1  8  4  2  1  8  4  2  1  8  4  2  1  8  4  2  1
+ *  
+ *                                                                 +--------------------------------+
+ *                                                                 | CAN Standard ID                |  < CAN 2.0B Standard Message
+ *                                                                 +--------------------------------+
+ *                                                                 | SIDH                  | SIDL   |  < MCP2515 Register Assignments
+ *                                                                 +--------------------------------+
+ *
+ *           +--------------------------------+-----------------------------------------------------+
+ *           | CAN Standard ID                | CAN Extended ID                                     |  < CAN 2.0B Extended Message
+ *           +-----------------------+--------+-----+-----------------------+-----------------------+
+ *           | SIDH                  | SIDL   | SIDL| EID8                  | EID0                  |  < MCP2515 Register Assignments
+ *           +-----------------------+--------+-----+-----------------------+-----------------------+
+ *
  */
 void can_compose_msgid_std(uint32_t id, uint8_t *bytebuf)
 {
