@@ -8,7 +8,7 @@
 #include "msp430_spi.h"
 
 /* Global variables used internally */
-uint8_t mcp2515_txb, mcp2515_ctrl;
+uint8_t mcp2515_txb, mcp2515_ctrl, mcp2515_exmask;
 
 /* Global variable exposed externally for IRQ handling */
 volatile uint8_t mcp2515_irq, mcp2515_buf;
@@ -121,7 +121,7 @@ void can_init()
 
 	spi_init();
 	can_spi_command(MCP2515_SPI_RESET);
-	__delay_cycles(16000);
+	__delay_cycles(160000);
 
 	mcp2515_ctrl = MCP2515_CANCTRL_REQOP_CONFIGURATION;
 	can_w_reg(MCP2515_CANCTRL, &mcp2515_ctrl, 1);
@@ -130,6 +130,8 @@ void can_init()
 	can_w_reg(MCP2515_CANINTE, &ie, 1);
 
 	mcp2515_irq = 0x00;
+	mcp2515_txb = 0x00;
+	mcp2515_exmask = 0x00;
 
 	_EINT();
 }
@@ -140,7 +142,7 @@ void can_init()
  */
 int can_speed(uint32_t bitrate, uint8_t propseg_hint, uint8_t syncjump)
 {
-	uint32_t a, brpdiv = 1;
+	uint32_t a;
 	uint16_t brp = 0, tq_prop, tq_ps1, tq_ps2;
 	uint8_t c;
 
@@ -157,8 +159,7 @@ int can_speed(uint32_t bitrate, uint8_t propseg_hint, uint8_t syncjump)
 	// Resolve appropriate bitrate prescaler
 	do {
 		brp++;
-		brpdiv *= 2;
-		a = CAN_OSC_FREQUENCY / 2 / brpdiv;  // TQ (Time Quanta) = tOSC / 2
+		a = CAN_OSC_FREQUENCY / 2 / brp;  // TQ (Time Quanta) = tOSC / 2
 		a /= bitrate;
 	} while (a > 25);
 
@@ -186,11 +187,11 @@ int can_speed(uint32_t bitrate, uint8_t propseg_hint, uint8_t syncjump)
 	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
 		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
 
-	c = (brp & 0x3F) | ((syncjump - 1) << 6);
+	c = ((brp - 1) & 0x3F) | ((syncjump - 1) << 6);
 	can_w_reg(MCP2515_CNF1, &c, 1);
-	can_w_bit(MCP2515_CNF2, MCP2515_CNF2_PRSEG_MASK | MCP2515_CNF2_PHSEG_MASK,
-			  tq_prop | (tq_ps1 << 3));
-	can_w_bit(MCP2515_CNF3, MCP2515_CNF3_PHSEG_MASK, tq_ps2);
+	can_w_bit(MCP2515_CNF2, MCP2515_CNF2_PRSEG_MASK | MCP2515_CNF2_PHSEG_MASK | MCP2515_CNF2_BTLMODE,
+			  MCP2515_CNF2_BTLMODE | (tq_prop-1) | ((tq_ps1-1) << 3));
+	can_w_bit(MCP2515_CNF3, MCP2515_CNF3_PHSEG_MASK, tq_ps2-1);
 
 	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
 		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, mcp2515_ctrl);
@@ -204,17 +205,17 @@ int can_speed(uint32_t bitrate, uint8_t propseg_hint, uint8_t syncjump)
 void can_compose_msgid_std(uint32_t id, uint8_t *bytebuf)
 {
 	bytebuf[0] = (uint8_t) ((id & 0x000007F8UL) >> 3);
-	bytebuf[1] = (uint8_t) ((id & 0x00000007UL) << 5) | (uint8_t) ((id & 0x30000000UL) >> 28);
-	bytebuf[2] = (uint8_t) ((id & 0x07F80000UL) >> 19);
-	bytebuf[3] = (uint8_t) ((id & 0x0007F800UL) >> 11);
+	bytebuf[1] = (uint8_t) ((id & 0x00000007UL) << 5);
+	bytebuf[2] = (uint8_t) ((id & 0xFF000000UL) >> 24);  // Upper 16 bits assumed to be potential byte-filter information
+	bytebuf[3] = (uint8_t) ((id & 0x00FF0000UL) >> 16);  // for mask & filters to filter on the first 16 bits of the frame data.
 }
 
 void can_compose_msgid_ext(uint32_t id, uint8_t *bytebuf)
 {
-	bytebuf[0] = (uint8_t) ((id & 0x000007F8UL) >> 3);
-	bytebuf[1] = (uint8_t) ((id & 0x00000007UL) << 5) | (uint8_t) ((id & 0x30000000UL) >> 28) | 0x08;  // EID
-	bytebuf[2] = (uint8_t) ((id & 0x07F80000UL) >> 19);
-	bytebuf[3] = (uint8_t) ((id & 0x0007F800UL) >> 11);
+	bytebuf[0] = (uint8_t) ((id & 0x1FE00000UL) >> 21);
+	bytebuf[1] = (uint8_t) ((id & 0x001C0000UL) >> 12) | (uint8_t) ((id & 0x00030000UL) >> 16) | 0x08;  // EID
+	bytebuf[2] = (uint8_t) ((id & 0x0000FF00UL) >> 8);
+	bytebuf[3] = (uint8_t) (id & 0x000000FFUL);
 }
 
 uint32_t can_parse_msgid(uint8_t *buf)
@@ -222,10 +223,10 @@ uint32_t can_parse_msgid(uint8_t *buf)
 	uint32_t ret = 0;
 
 	if (buf[1] & 0x08) {  // Extended message ID
-		ret = ((uint32_t)(buf[0]) << 3) | ((uint32_t)(buf[1]) >> 5) |
-			  (((uint32_t)(buf[1]) & 0x03) << 27) |
-			  ((uint32_t)(buf[2]) << 19) |
-			  ((uint32_t)(buf[3]) << 11);
+		ret = ((uint32_t)(buf[0]) << 21) | ((uint32_t)(buf[1] & 0xE0) << 12) |
+			  (((uint32_t)(buf[1]) & 0x03) << 16) |
+			  ((uint32_t)(buf[2]) << 8) |
+			  (uint32_t)(buf[3]);
 	} else {
 		ret = ((uint32_t)(buf[0]) << 3) | ((uint32_t)(buf[1]) >> 5);
 	}
@@ -272,8 +273,8 @@ int can_send(uint32_t msg, uint8_t is_ext, void *buf, uint8_t len, uint8_t prio)
 
 	can_w_reg(MCP2515_TXB0CTRL + 0x10*txb, &prio, 1);
 	can_w_txbuf(MCP2515_TXBUF_TXB0SIDH + 2*txb, outbuf, 5+len);
-	can_w_bit(MCP2515_TXB0CTRL + 0x10*txb, MCP2515_TXBCTRL_TXREQ, MCP2515_TXBCTRL_TXREQ);
 	can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << txb, MCP2515_CANINTE_TX0IE << txb);
+	//can_w_bit(MCP2515_TXB0CTRL + 0x10*txb, MCP2515_TXBCTRL_TXREQ, MCP2515_TXBCTRL_TXREQ);
 	can_spi_command(MCP2515_SPI_RTS | mcp2515_txb);  // Initiate transmission
 
 	return txb;
@@ -318,11 +319,29 @@ int can_query(uint32_t msg, uint8_t is_ext, uint8_t prio)
 	// Send
 	can_w_reg(MCP2515_TXB0CTRL + 0x10*txb, &prio, 1);
 	can_w_txbuf(MCP2515_TXBUF_TXB0SIDH + 2*txb, outbuf, 5);
-	can_w_bit(MCP2515_TXB0CTRL + 0x10*txb, MCP2515_TXBCTRL_TXREQ, MCP2515_TXBCTRL_TXREQ);
 	can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << txb, MCP2515_CANINTE_TX0IE << txb);
+	//can_w_bit(MCP2515_TXB0CTRL + 0x10*txb, MCP2515_TXBCTRL_TXREQ, MCP2515_TXBCTRL_TXREQ);
 	can_spi_command(MCP2515_SPI_RTS);  // Initiate transmission
 
 	return txb;
+}
+
+// Returns -1 if no TXB's were active
+int can_tx_cancel()
+{
+	uint8_t i, work_done = -1;
+	
+	for (i=0; i < 3; i++) {
+		if (mcp2515_txb & (1 << i)) {
+			// Cancel TXREQ bit
+			can_w_bit(MCP2515_TXB0CTRL + 0x10*i, MCP2515_TXBCTRL_TXREQ, 0x00);
+			// Disable IRQ for this TXB
+			can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_TX0IF << i, 0x00);
+			can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << i, 0x00);
+			work_done = 0;
+		}
+	}
+	return work_done;
 }
 
 /* CAN message receive */
@@ -330,22 +349,18 @@ int can_query(uint32_t msg, uint8_t is_ext, uint8_t prio)
 // Returns length of packet or -1 if nothing to read
 int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
 {
-	uint8_t canintf, msginbuf[13];
+	uint8_t msginbuf[13];
 	int rxb = -1;
 
 	// Any of them have unread data?
-	can_r_reg(MCP2515_CANINTF, &canintf, 1);
-	if (canintf & MCP2515_CANINTF_RX0IF)
-		rxb = 0;
-	if (canintf & MCP2515_CANINTF_RX1IF)
-		rxb = 1;
+	rxb = can_rx_pending();
 	if (rxb < 0)
 		return -1;
 
 	// Pull down the message
 	can_r_rxbuf(MCP2515_RXBUF_RXB0SIDH + 0x04*rxb, msginbuf, 13);
 	*msgid = can_parse_msgid(msginbuf);
-	if (msginbuf[1] & 0x04)
+	if (msginbuf[1] & 0x08)
 		*is_ext = 1;
 	else
 		*is_ext = 0;
@@ -384,10 +399,14 @@ int can_rx_setmask(uint8_t maskid, uint32_t msgmask, uint8_t is_ext)
 	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
 		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
 
-	if (is_ext)
+	if (is_ext) {
 		can_compose_msgid_ext(msgmask, maskbuf);
-	else
+		maskbuf[1] &= ~0x08;  // EXIDE is unimplemented in the MASK registers
+		mcp2515_exmask |= 1 << maskid;
+	} else {
 		can_compose_msgid_std(msgmask, maskbuf);
+		mcp2515_exmask &= ~(1 << maskid);
+	}
 	
 	can_w_reg(MCP2515_RXM0SIDH + maskid * 0x04, maskbuf, 4);
 
@@ -397,30 +416,28 @@ int can_rx_setmask(uint8_t maskid, uint32_t msgmask, uint8_t is_ext)
 	return maskid;
 }
 
-/* Configure filter.  filtid is from 0-2 (0-1 when rxb=0, 0-2 when rxb=1).
- * Standard vs. Extended ID is determined by examining the rxb's current MASK.
+/* Configure filter.  filtid is from 0-3 (0-1 when rxb=0, 0-3 when rxb=1)
+ * Standard vs. Extended ID is determined by mcp2515_exmask (whether a mask was specified
+ * for std or ext operation)
  */
 int can_rx_setfilter(uint8_t rxb, uint8_t filtid, uint32_t msgid)
 {
-	uint8_t idbuf[4], mask;
+	uint8_t idbuf[4];
 
 	if (rxb > 1)
 		return -1;
-	if (!rxb && filtid > 1)
-		return -1;
-	if (filtid > 2)
+	if (filtid > 5 || (filtid > 1 && rxb == 0))
 		return -1;
 	
 	if ( (mcp2515_ctrl & MCP2515_CANCTRL_REQOP_MASK) != MCP2515_CANCTRL_REQOP_CONFIGURATION )
 		can_w_bit(MCP2515_CANCTRL, MCP2515_CANCTRL_REQOP_MASK, MCP2515_CANCTRL_REQOP_CONFIGURATION);
 
-	filtid += 2*rxb;
-	can_r_reg(MCP2515_RXM0SIDL + rxb*0x04, &mask, 1);
-	if (mask & 0x08) // Extended ID
+	if (mcp2515_exmask & (1 << rxb)) // Extended ID
 		can_compose_msgid_ext(msgid, idbuf);
 	else
 		can_compose_msgid_std(msgid, idbuf);
 	
+	filtid += 2*rxb;
 	if (filtid < 3)
 		can_w_reg(MCP2515_RXF0SIDH + filtid * 0x04, idbuf, 4);
 	else
@@ -437,8 +454,9 @@ int can_rx_mode(uint8_t rxb, uint8_t mode)
 {
 	if (rxb > 1)
 		return -1;
-	
+
 	can_w_bit(MCP2515_RXB0CTRL + rxb*0x10, MCP2515_RXB0CTRL_RXM0 | MCP2515_RXB0CTRL_RXM0, mode);
+
 	return 0;
 }
 
@@ -636,10 +654,19 @@ int can_irq_handler()
 				if (txbctrl & MCP2515_TXBCTRL_TXERR) {
 					mcp2515_buf = i;
 					can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_MERRF, 0);  // Clear MERRF
-					can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << i, 0);  // Disable interrupt (will be re-enabled on next TX)
-					mcp2515_txb &= ~(1 << i);
-					mcp2515_irq |= MCP2515_IRQ_TX | MCP2515_IRQ_ERROR | MCP2515_IRQ_HANDLED;
-					return MCP2515_IRQ_TX | MCP2515_IRQ_ERROR | MCP2515_IRQ_HANDLED;
+					// Are we in OneShot mode?
+					if (mcp2515_ctrl & MCP2515_CANCTRL_OSM) {
+						can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << i, 0);  // Disable interrupt (will be re-enabled on next TX)
+						mcp2515_txb &= ~(1 << i);
+						mcp2515_irq |= MCP2515_IRQ_TX | MCP2515_IRQ_ERROR | MCP2515_IRQ_HANDLED;
+						return MCP2515_IRQ_TX | MCP2515_IRQ_ERROR | MCP2515_IRQ_HANDLED;
+					} else {
+					// If not, notify that TX error occurred but it "hasn't" been handled.  MCU intervention may be required
+					// in order to monitor and validate the # of retries that have occurred & failed and whether the request should
+					// be cancelled.
+						mcp2515_irq |= MCP2515_IRQ_TX | MCP2515_IRQ_ERROR;
+						return MCP2515_IRQ_TX | MCP2515_IRQ_ERROR;
+					}
 				}
 			}
 		}

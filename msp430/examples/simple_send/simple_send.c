@@ -33,7 +33,7 @@ int main()
 	}
 
 	can_rx_setmask(0, 0x000000FF, 1);
-	can_rx_setfilter(0, 0, 0x00000080);
+	can_rx_setfilter(0, 0x00000080);
 	can_rx_mode(0, MCP2515_RXB0CTRL_MODE_RECV_STD_OR_EXT);
 
 	can_ioctl(MCP2515_OPTION_LOOPBACK, 1);
@@ -87,7 +87,7 @@ int main()
 		}
 
 		if ( !(mcp2515_irq & MCP2515_IRQ_FLAGGED) ) {
-			P1OUT ^= BIT0;
+			//P1OUT ^= BIT0;
 			LPM3;
 		}
 	}

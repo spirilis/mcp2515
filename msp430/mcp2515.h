@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 /* User configuration */
-#define CAN_SPI_CS_PORTBIT BIT2
+#define CAN_SPI_CS_PORTBIT BIT4
 #define CAN_SPI_CS_PORTOUT P2OUT
 #define CAN_SPI_CS_PORTDIR P2DIR
 
@@ -353,6 +353,7 @@ uint32_t can_parse_msgid(uint8_t *);
 
 int can_send(uint32_t, uint8_t, void *, uint8_t, uint8_t);
 int can_query(uint32_t, uint8_t, uint8_t);
+int can_tx_cancel();
 int can_recv(uint32_t *, uint8_t *, void *);
 int can_rx_pending();
 int can_rx_setmask(uint8_t, uint32_t, uint8_t);

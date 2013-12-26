@@ -32,10 +32,11 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
 
     > Configure one of the two message filter masks.  **maskid** = 0 is for RXB0, **maskid** = 1 is for RXB1.
     > **msgmask** stores up to 29 bits, and **is_ext** declares whether this is a CAN 2.0B Extended message
-    > or Standard 11-bit message.  Keep in mind, on the MCP2515, if is_ext = 0 the device will still use
-    > the extended bits (bit# 11-26) as a 16-bit filter against the first 2 bytes in the data field.  This
-    > function allows this feature if you provide a >11bit mask.  It's meant to support upper-layer protocols
-    > running on top of CAN.
+    > or Standard 11-bit message.  Keep in mind, on the MCP2515, if is_ext = 0 the device will use the extended
+    > bits as a 16-bit filter against the first 2 bytes in the data field.  This function allows this feature
+    > by copying the upper 16 bits of the msgmask into EID[15:0].  It's meant to support upper-layer protocols
+    > running on top of CAN.  In this use, the lower 11 bits of _msgmask_ represent the CAN ID, and the
+    > upper 16 bits of _msgmask_ represent the first 2 bytes of the data field.
     >
     > The _can_rx_setfilter()_ function will read the RXB#'s mask to determine if its filter is meant to be
     > an Extended message or not.
@@ -45,7 +46,7 @@ _can_ioctl(MCP2515_OPTION_SLEEP, 0)_
 * **int** can_rx_setfilter( **uint8_t** rxb, **uint8_t** filtid, **uint32_t** msgid )
 
     > Set a filter.  **rxb** is the buffer#, **filtid** sets the filter# ... rxb0 supports 2 filters (filtid = 0 or 1),
-    > rxb1 supports 3 filters (filtid = 0, 1 or 2).  rxb0 is considered a higher-priority buffer, and there is
+    > rxb1 supports 4 filters (filtid = 0, 1, 2 or 3).  rxb0 is considered a higher-priority buffer, and there is
     > an optional feature (see _can_ioctl()_) to enable ROLLOVER so unread rxb0 contents will get pushed into
     > rxb1 if a new message comes into rxb0 before the user has read rxb0's previous contents.
     >
@@ -163,7 +164,9 @@ The MCP2515_IRQ_ERROR bit indicates one of many error conditions are present.  A
 * MCP2515_IRQ_ERROR alone means Bus Error; use _can_read_error(MCP2515_EFLG)_ to get more detail.  See the Errors section below for more detail.
 * MCP2515_IRQ_ERROR with MCP2515_IRQ_RX means a message was in the process of being received but an error occurred.  Nothing more needs to be
   done here.
-* MCP2515_IRQ_ERROR with MCP2515_IRQ_TX means a transmit failed.  _mcp2515_buf_ contains the TXB# affected.
+* MCP2515_IRQ_ERROR with MCP2515_IRQ_TX means a transmit failed.  _mcp2515_buf_ contains the TXB# affected.  Note that in ONESHOT mode, MCP2515_IRQ_HANDLED
+  is set but in non-ONESHOT mode, MCP2515_IRQ_HANDLED is cleared implying that the firmware needs to keep track of the # of TX errors and potentially
+  abort transmission if necessary.
 
 * **int** can_irq_handler()
 
