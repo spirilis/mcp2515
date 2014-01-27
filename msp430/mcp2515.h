@@ -354,6 +354,7 @@ uint32_t can_parse_msgid(uint8_t *);
 int can_send(uint32_t, uint8_t, void *, uint8_t, uint8_t);
 int can_query(uint32_t, uint8_t, uint8_t);
 int can_tx_cancel();
+int can_tx_available();
 int can_recv(uint32_t *, uint8_t *, void *);
 int can_rx_pending();
 int can_rx_setmask(uint8_t, uint32_t, uint8_t);
@@ -362,6 +363,7 @@ int can_rx_mode(uint8_t, uint8_t);
 int can_ioctl(uint8_t, uint8_t);
 int can_read_error(uint8_t);
 int can_irq_handler();
+int can_clear_buserror();
 
 
 #endif

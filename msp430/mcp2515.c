@@ -264,13 +264,7 @@ int can_send(uint32_t msg, uint8_t is_ext, void *buf, uint8_t len, uint8_t prio)
 		return -1;
 
 	// Choose an available TX buffer
-	if ( !(mcp2515_txb & BIT0) )
-		txb = 0;
-	else if ( !(mcp2515_txb & BIT1) )
-		txb = 1;
-	else if ( !(mcp2515_txb & BIT2) )
-		txb = 2;
-	else
+	if ( (txb = can_tx_available()) < 0 )
 		return -1;
 	mcp2515_txb |= 1 << txb;
 
@@ -364,6 +358,20 @@ int can_tx_cancel()
 	return work_done;
 }
 
+// Returns available TXB if one is available, else -1 indicating the user must wait to TX.
+int can_tx_available()
+{
+	int txb = -1;
+
+	if ( !(mcp2515_txb & BIT0) )
+		txb = 0;
+	else if ( !(mcp2515_txb & BIT1) )
+		txb = 1;
+	else if ( !(mcp2515_txb & BIT2) )
+		txb = 2;
+	return txb;
+}
+
 /* CAN message receive */
 
 // Returns length of packet or -1 if nothing to read
@@ -379,14 +387,15 @@ int can_recv(uint32_t *msgid, uint8_t *is_ext, void *buf)
 
 	// Pull down the message
 	can_r_rxbuf(MCP2515_RXBUF_RXB0SIDH + 0x04*rxb, msginbuf, 13);
+	// To reduce risk of RXB overflow, acknowledge IRQ right away.
+	can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_RX0IF + rxb, 0x00);
+
 	*msgid = can_parse_msgid(msginbuf);
 	if (msginbuf[1] & 0x08)
 		*is_ext = 1;
 	else
 		*is_ext = 0;
 	memcpy((uint8_t *)buf, msginbuf+5, msginbuf[4] & 0x0F);
-
-	can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_RX0IF + rxb, 0x00);
 
 	// Present RTR or SRR bit as 0x40
 	if (is_ext)
@@ -704,6 +713,9 @@ int can_irq_handler()
 		if (eflg & (MCP2515_EFLG_RX0OVR | MCP2515_EFLG_RX1OVR)) {
 			// RX overflow
 			can_w_bit(MCP2515_EFLG, MCP2515_EFLG_RX0OVR | MCP2515_EFLG_RX1OVR, 0);
+			eflg &= ~(MCP2515_EFLG_RX0OVR | MCP2515_EFLG_RX1OVR);
+			if (!eflg)
+				can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_ERRIF, 0);
 			mcp2515_irq |= MCP2515_IRQ_RX | MCP2515_IRQ_ERROR | MCP2515_IRQ_HANDLED;
 			return MCP2515_IRQ_RX | MCP2515_IRQ_ERROR | MCP2515_IRQ_HANDLED;
 		}
@@ -720,4 +732,19 @@ int can_irq_handler()
 	 */
 	mcp2515_irq &= ~MCP2515_IRQ_FLAGGED;
 	return 0;
+}
+
+int can_clear_buserror()
+{
+	uint8_t intf, eflg;
+
+	can_r_reg(MCP2515_CANINTF, &intf, 1);
+	if (intf & MCP2515_CANINTF_ERRIF) {
+		can_r_reg(MCP2515_EFLG, &eflg, 1);
+		can_w_bit(MCP2515_EFLG, MCP2515_EFLG_RX0OVR | MCP2515_EFLG_RX1OVR, 0);  // The only bits that can be written
+		can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_ERRIF, 0);
+		return eflg;
+	}
+
+	return -1;  // No bus error found
 }
