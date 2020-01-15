@@ -233,7 +233,7 @@ void can_compose_msgid_std(uint32_t id, uint8_t *bytebuf)
 void can_compose_msgid_ext(uint32_t id, uint8_t *bytebuf)
 {
 	bytebuf[0] = (uint8_t) ((id & 0x1FE00000UL) >> 21);
-	bytebuf[1] = (uint8_t) ((id & 0x001C0000UL) >> 12) | (uint8_t) ((id & 0x00030000UL) >> 16) | 0x08;  // EID
+	bytebuf[1] = (uint8_t) ((id & 0x001C0000UL) >> 13) | (uint8_t) ((id & 0x00030000UL) >> 16) | 0x08;  // EID
 	bytebuf[2] = (uint8_t) ((id & 0x0000FF00UL) >> 8);
 	bytebuf[3] = (uint8_t) (id & 0x000000FFUL);
 }
@@ -654,7 +654,7 @@ int can_irq_handler()
 
 	// TX success IRQ?
 	if (ifg & (MCP2515_CANINTF_TX0IF | MCP2515_CANINTF_TX1IF | MCP2515_CANINTF_TX2IF)) {
-		for (i=0; i < 2; i++) {
+		for (i=0; i <= 2; i++) {
 			if (ifg & (MCP2515_CANINTF_TX0IF << i)) {
 				can_w_bit(MCP2515_CANINTF, MCP2515_CANINTF_TX0IF << i, 0);  // Clear IFG
 				can_w_bit(MCP2515_CANINTE, MCP2515_CANINTE_TX0IE << i, 0);  // Disable interrupt (will be re-enabled on next TX)
@@ -677,7 +677,7 @@ int can_irq_handler()
 	if (ifg & MCP2515_CANINTF_MERRF) {
 		can_r_reg(MCP2515_CANINTE, &ie, 1);
 		// See if it's a TX error
-		for (i=0; i < 2; i++) {
+		for (i=0; i <= 2; i++) {
 			if (ie & (MCP2515_CANINTE_TX0IE << i)) {
 				can_r_reg(MCP2515_TXB0CTRL + 0x10*i, &txbctrl, 1);
 				if (txbctrl & MCP2515_TXBCTRL_TXERR) {
